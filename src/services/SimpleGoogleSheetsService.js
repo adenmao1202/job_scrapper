@@ -9,6 +9,7 @@ class SimpleGoogleSheetsService {
     this.spreadsheetId = process.env.GOOGLE_SHEET_ID;
     this.serviceAccountEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
     this.privateKeyPath = process.env.GOOGLE_PRIVATE_KEY_PATH;
+    this.serviceAccountJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
     this.sheets = null;
     
     this.initializeAuth();
@@ -23,10 +24,19 @@ class SimpleGoogleSheetsService {
       }
 
       // Use service account authentication
-      this.auth = new google.auth.GoogleAuth({
-        keyFile: this.privateKeyPath,
-        scopes: ['https://www.googleapis.com/auth/spreadsheets']
-      });
+      if (this.serviceAccountJson) {
+        // Production: use JSON from environment variable
+        this.auth = new google.auth.GoogleAuth({
+          credentials: JSON.parse(this.serviceAccountJson),
+          scopes: ['https://www.googleapis.com/auth/spreadsheets']
+        });
+      } else {
+        // Development: use key file
+        this.auth = new google.auth.GoogleAuth({
+          keyFile: this.privateKeyPath,
+          scopes: ['https://www.googleapis.com/auth/spreadsheets']
+        });
+      }
 
       this.sheets = google.sheets({ version: 'v4', auth: this.auth });
       
