@@ -6,16 +6,27 @@ class PostgreSQLService {
     // Load environment variables
     require('dotenv').config();
     
-    this.pool = new Pool({
-      host: process.env.DB_HOST || 'localhost',
-      port: process.env.DB_PORT || 5432,
-      database: process.env.DB_NAME || 'job_scraper',
-      user: process.env.DB_USER || 'mouyasushi',
-      password: process.env.DB_PASSWORD || '',
-      max: 10, // Maximum number of connections
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 2000,
-    });
+    // Use DATABASE_URL for production (Render) or individual params for development
+    if (process.env.DATABASE_URL) {
+      this.pool = new Pool({
+        connectionString: process.env.DATABASE_URL,
+        ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+        max: 10,
+        idleTimeoutMillis: 30000,
+        connectionTimeoutMillis: 2000,
+      });
+    } else {
+      this.pool = new Pool({
+        host: process.env.DB_HOST || 'localhost',
+        port: process.env.DB_PORT || 5432,
+        database: process.env.DB_NAME || 'job_scraper',
+        user: process.env.DB_USER || 'mouyasushi',
+        password: process.env.DB_PASSWORD || '',
+        max: 10,
+        idleTimeoutMillis: 30000,
+        connectionTimeoutMillis: 2000,
+      });
+    }
 
     // Test connection on startup
     this.testConnection();
