@@ -1,0 +1,43 @@
+{
+  "name": "daily-job-collector",
+  "version": "1.0.0",
+  "description": "Automated job collection and processing system",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/postgres-sheets-collector.js",
+    "dev": "nodemon src/postgres-sheets-collector.js",
+    "test": "node test.js",
+    "test:linkedin": "node src/test-linkedin-scraper.js",
+    "test:sheets": "node src/test-sheets-integration.js",
+    "collect:once": "node src/linkedin-integration.js",
+    "lint": "eslint src/",
+    "setup": "npm install && cp .env.example .env"
+  },
+  "dependencies": {
+    "airtable": "^0.12.2",
+    "axios": "^1.6.0",
+    "cheerio": "^1.0.0-rc.12",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "googleapis": "^152.0.0",
+    "helmet": "^8.1.0",
+    "morgan": "^1.10.0",
+    "node-cron": "^3.0.2",
+    "nodemailer": "^7.0.5",
+    "pg": "^8.16.3"
+  },
+  "devDependencies": {
+    "eslint": "^8.50.0",
+    "jest": "^29.7.0",
+    "nodemon": "^3.0.1"
+  },
+  "keywords": [
+    "job",
+    "automation",
+    "scraping",
+    "airtable"
+  ],
+  "author": "",
+  "license": "MIT"
+}
