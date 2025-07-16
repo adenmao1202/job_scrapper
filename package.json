@@ -11,7 +11,9 @@
     "test:sheets": "node src/test-sheets-integration.js",
     "collect:once": "node src/linkedin-integration.js",
     "lint": "eslint src/",
-    "setup": "npm install && cp .env.example .env"
+    "setup": "npm install && cp .env.example .env",
+    "db:init": "node src/database/init.js",
+    "db:create": "node src/database/init.js"
   },
   "dependencies": {
     "airtable": "^0.12.2",

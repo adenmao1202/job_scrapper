@@ -1,9 +1,11 @@
 require('dotenv').config();
 const cron = require('node-cron');
+const express = require('express');
 const LinkedInScraper = require('./services/LinkedInScraper');
 const PostgreSQLService = require('./services/PostgreSQLService');
 const GoogleSheetsService = require('./services/SimpleGoogleSheetsService');
 const EmailService = require('./services/EmailService');
+const DatabaseInitializer = require('./database/init');
 const { logger } = require('./utils/logger');
 const { delay } = require('./utils/helpers');
 
@@ -20,8 +22,41 @@ class PostgresGoogleSheetsCollector {
   async start() {
     logger.info('🚀 Starting PostgreSQL + Google Sheets Job Collector...');
     
+    // Initialize database schema first
+    const dbInitializer = new DatabaseInitializer();
+    await dbInitializer.initialize();
+    await dbInitializer.close();
+    
     // Initialize Google Sheets if configured
     await this.sheetsService.createJobsSheet();
+    
+    // Create Express app for health checks (required for Render)
+    const app = express();
+    const PORT = process.env.PORT || 3000;
+    
+    // Health check endpoint
+    app.get('/', (req, res) => {
+      res.json({ 
+        status: 'healthy', 
+        service: 'Job Collector',
+        timestamp: new Date().toISOString(),
+        running: this.isRunning
+      });
+    });
+    
+    app.get('/health', (req, res) => {
+      res.json({ 
+        status: 'healthy', 
+        service: 'Job Collector',
+        timestamp: new Date().toISOString(),
+        running: this.isRunning
+      });
+    });
+    
+    // Start HTTP server
+    app.listen(PORT, '0.0.0.0', () => {
+      logger.info(`🌐 HTTP server listening on port ${PORT}`);
+    });
     
     // Schedule job collection every 2 hours
     cron.schedule('0 */2 * * *', async () => {
