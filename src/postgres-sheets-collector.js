@@ -86,13 +86,6 @@ class PostgresGoogleSheetsCollector {
     logger.info('🔍 Starting LinkedIn job collection...');
 
     try {
-      // Build LinkedIn search URL from environment variables
-      const keywords = process.env.JOB_KEYWORDS || 'quant (remote)';
-      const location = process.env.JOB_LOCATION || 'Taiwan';
-      const geoId = process.env.JOB_GEO_ID || '104187078'; // Taiwan's LinkedIn geo ID
-      
-      const linkedinUrl = `https://www.linkedin.com/jobs/search/?keywords=${encodeURIComponent(keywords)}&geoId=${geoId}&origin=JOB_SEARCH_PAGE_SEARCH_BUTTON&refresh=true`;
-      
       // Get existing jobs to prevent duplicates
       const existingJobs = await this.dbService.getExistingJobs();
       this.processedJobs = new Set(existingJobs.map(job => job.url));
@@ -104,11 +97,26 @@ class PostgresGoogleSheetsCollector {
       
       logger.info(`📋 Found ${existingJobs.length} existing jobs in PostgreSQL`);
       
-      // Scrape jobs from LinkedIn
-      const scrapedJobs = await this.scraper.scrapeLinkedInJobs(linkedinUrl);
+      // Get all search configurations
+      const searchConfigs = this.getSearchConfigurations();
+      let allScrapedJobs = [];
+      
+      // Run multiple searches to get more diverse results
+      for (const config of searchConfigs) {
+        logger.info(`🔍 Searching LinkedIn for: ${config.keywords}`);
+        
+        const searchResults = await this.scraper.scrapeLinkedInJobs(config.url);
+        allScrapedJobs = allScrapedJobs.concat(searchResults);
+        
+        // Add delay between searches to avoid rate limiting
+        await delay(parseInt(process.env.REQUEST_DELAY) || 3000);
+      }
+      
+      // Remove duplicates from all scraped jobs
+      const uniqueScrapedJobs = this.removeDuplicateJobs(allScrapedJobs);
       
       // Filter new jobs (check both URL and composite key - exclude if EITHER exists)
-      const newJobs = scrapedJobs.filter(job => {
+      const newJobs = uniqueScrapedJobs.filter(job => {
         const compositeKey = `${(job.company || '').toLowerCase().trim()}-${(job.title || '').toLowerCase().trim()}-${(job.location || '').toLowerCase().trim()}`;
         const isDuplicateUrl = this.processedJobs.has(job.url);
         const isDuplicateComposite = this.processedJobsComposite.has(compositeKey);
@@ -154,7 +162,8 @@ class PostgresGoogleSheetsCollector {
       
       // Log summary
       const summary = {
-        totalScraped: scrapedJobs.length,
+        totalScraped: uniqueScrapedJobs.length,
+        searchQueries: searchConfigs.length,
         newJobs: newJobs.length,
         processed: processedCount,
         errors: errorCount,
@@ -295,6 +304,84 @@ class PostgresGoogleSheetsCollector {
     ).join('\n');
     
     return benefits.substring(0, 500);
+  }
+
+  getSearchConfigurations() {
+    const geoId = process.env.JOB_GEO_ID || '104187078';
+    const keywords = process.env.JOB_KEYWORDS || 'data analyst,quantitative analyst,research analyst,data scientist,quant';
+    
+    // Split keywords and create individual searches
+    const keywordList = keywords.split(',').map(k => k.trim());
+    
+    // Create search configurations
+    const searchConfigs = [];
+    
+    // Individual keyword searches
+    keywordList.forEach(keyword => {
+      searchConfigs.push({
+        keywords: keyword,
+        url: `https://www.linkedin.com/jobs/search/?keywords=${encodeURIComponent(keyword)}&geoId=${geoId}&origin=JOB_SEARCH_PAGE_SEARCH_BUTTON&refresh=true&f_TPR=r604800` // Past week
+      });
+    });
+    
+    // Add some broader combined searches
+    const combinedSearches = [
+      'data analyst remote',
+      'quantitative analyst remote',
+      'research analyst remote',
+      'data scientist remote',
+      'python analyst',
+      'finance analyst',
+      'statistics analyst',
+      'machine learning analyst',
+      'business analyst',
+      'financial analyst'
+    ];
+    
+    combinedSearches.forEach(keyword => {
+      searchConfigs.push({
+        keywords: keyword,
+        url: `https://www.linkedin.com/jobs/search/?keywords=${encodeURIComponent(keyword)}&geoId=${geoId}&origin=JOB_SEARCH_PAGE_SEARCH_BUTTON&refresh=true&f_TPR=r604800`
+      });
+    });
+    
+    // Add global remote searches (without geo restriction)
+    const globalRemoteSearches = [
+      'quantitative researcher remote',
+      'quant researcher remote',
+      'quantitative analyst remote',
+      'data scientist remote',
+      'research scientist remote'
+    ];
+    
+    globalRemoteSearches.forEach(keyword => {
+      searchConfigs.push({
+        keywords: keyword + ' (global)',
+        url: `https://www.linkedin.com/jobs/search/?keywords=${encodeURIComponent(keyword)}&f_WT=2&origin=JOB_SEARCH_PAGE_SEARCH_BUTTON&refresh=true&f_TPR=r604800` // f_WT=2 for remote
+      });
+    });
+    
+    logger.info(`📋 Created ${searchConfigs.length} search configurations`);
+    return searchConfigs;
+  }
+
+  removeDuplicateJobs(jobs) {
+    const uniqueJobs = [];
+    const seenUrls = new Set();
+    const seenComposites = new Set();
+    
+    for (const job of jobs) {
+      const compositeKey = `${(job.company || '').toLowerCase().trim()}-${(job.title || '').toLowerCase().trim()}-${(job.location || '').toLowerCase().trim()}`;
+      
+      if (!seenUrls.has(job.url) && !seenComposites.has(compositeKey)) {
+        uniqueJobs.push(job);
+        seenUrls.add(job.url);
+        seenComposites.add(compositeKey);
+      }
+    }
+    
+    logger.info(`🔄 Removed ${jobs.length - uniqueJobs.length} duplicate jobs from scraped results`);
+    return uniqueJobs;
   }
 
   async stop() {
